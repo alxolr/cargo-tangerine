@@ -1,13 +1,11 @@
-use std::path::PathBuf;
-
 use serde::Deserialize;
+use std::path::PathBuf;
 
 use crate::errors::{Error, Result};
 
 #[derive(Debug, Deserialize)]
 pub struct Workspace {
     pub members: Vec<String>,
-    pub resolver: Option<String>,
 }
 
 /// Workspace manifest file
