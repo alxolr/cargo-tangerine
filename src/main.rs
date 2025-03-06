@@ -4,6 +4,7 @@ use subcommands::{list::List, publish::Publish};
 
 mod errors;
 mod subcommands;
+mod models;
 
 #[derive(Debug, Parser)]
 enum Subcommand {

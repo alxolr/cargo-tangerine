@@ -8,6 +8,8 @@ pub type Result<T> = std::result::Result<T, Error>;
 pub enum Error {
     Io(std::io::Error),
     Clap(clap::Error),
+    Toml(toml::de::Error),
+    Str(&'static str),
 }
 
 impl Display for Error {
@@ -15,6 +17,8 @@ impl Display for Error {
         match self {
             Error::Io(err) => write!(f, "I/O error: {}", err),
             Error::Clap(err) => write!(f, "clap error: {}", err),
+            Error::Toml(err) => write!(f, "TOML error: {}", err),
+            Error::Str(err) => write!(f, "{}", err),
         }
     }
 }
