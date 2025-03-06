@@ -1,0 +1,20 @@
+[package]
+name = "cargo-tangerine"
+version = "0.1.0"
+authors = ["Alexandru Olaru <alxolr@gmail.com>"]
+edition = "2021"
+description = "Cargo workspaces monorepo manager"
+license = "MIT"
+readme = "README.md"
+default-run = "cargo-tangerine"
+
+[[bin]]
+name = "cargo-tangerine"
+path = "src/main.rs"
+
+
+[profile.release]
+lto = "thin"
+
+[dependencies]
+clap = { version = "4.5.31", features = ["derive"] }
