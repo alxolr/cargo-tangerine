@@ -1,6 +1,6 @@
 use clap::Parser;
 use errors::Result;
-use subcommands::publish::Publish;
+use subcommands::{list::List, publish::Publish};
 
 mod errors;
 mod subcommands;
@@ -8,6 +8,7 @@ mod subcommands;
 #[derive(Debug, Parser)]
 enum Subcommand {
     Publish(Publish),
+    List(List),
 }
 
 #[derive(Debug, Parser)]
@@ -29,6 +30,9 @@ async fn main() -> Result<()> {
     match opt.subcmd {
         Subcommand::Publish(publish) => {
             publish.run().await?;
+        }
+        Subcommand::List(list) => {
+            list.run().await?;
         }
     }
 
