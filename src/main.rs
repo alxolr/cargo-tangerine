@@ -1,9 +1,13 @@
 use clap::Parser;
-mod publish;
+use errors::Result;
+use subcommands::publish::Publish;
+
+mod errors;
+mod subcommands;
 
 #[derive(Debug, Parser)]
 enum Subcommand {
-    Publish(publish::Publish),
+    Publish(Publish),
 }
 
 #[derive(Debug, Parser)]
@@ -18,12 +22,15 @@ enum Cargo {
     Tangerine(Opt),
 }
 
-fn main() {
+#[tokio::main]
+async fn main() -> Result<()> {
     let Cargo::Tangerine(opt) = Cargo::parse();
 
     match opt.subcmd {
         Subcommand::Publish(publish) => {
-            publish.run();
+            publish.run().await?;
         }
     }
+
+    Ok(())
 }
