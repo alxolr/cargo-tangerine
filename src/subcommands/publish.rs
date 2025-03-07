@@ -1,4 +1,4 @@
-use std::path::PathBuf;
+use std::{env, path::PathBuf};
 
 use clap::Parser;
 
@@ -10,7 +10,7 @@ use crate::{
 
 #[derive(Debug, Parser)]
 pub struct Publish {
-    #[clap(short, long, default_value = ".")]
+    #[clap(default_value_os_t = env::current_dir().unwrap())]
     path: PathBuf,
 }
 
@@ -22,12 +22,10 @@ impl Publish {
         let manifest = workspace::Manifest::from_toml(&manifest_path)?;
 
         for member in manifest.workspace.members.iter() {
-            let package_path = self.path.join(member).join("Cargo.toml");
-            let package_manifest = package::Manifest::from_toml(&package_path)?;
+            let package_manifest_path = self.path.join(member).join("Cargo.toml");
+            let package_manifest = package::Manifest::from_toml(&package_manifest_path)?;
 
-            let published_version = run_cargo_info(member, &manifest_path).await?;
-
-            println!("{:?}", published_version);
+            let published_version = run_cargo_info(member, &self.path).await?;
 
             if published_version.version == package_manifest.package.version {
                 println!("{}@{} ✔", member, package_manifest.package.version);
@@ -42,7 +40,7 @@ impl Publish {
                 );
 
                 // Publish package
-                run_cargo_publish(member, &manifest_path).await?;
+                run_cargo_publish(member, &self.path).await?;
             }
         }
 
