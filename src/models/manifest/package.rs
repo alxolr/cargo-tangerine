@@ -4,11 +4,10 @@ use serde::Deserialize;
 
 use crate::errors::Result;
 
-#[derive(Debug, Deserialize)]
+#[derive(Debug, Deserialize, Default)]
 pub struct Package {
     pub name: String,
     pub version: String,
-    pub registry: Option<String>,
 }
 
 #[derive(Debug, Deserialize)]

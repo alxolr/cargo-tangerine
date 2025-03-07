@@ -3,15 +3,15 @@ name = "cargo-tangerine"
 version = "0.1.0"
 authors = ["Alexandru Olaru <alxolr@gmail.com>"]
 edition = "2021"
-description = "Cargo workspaces monorepo manager"
+description = "Cargo workspaces monorepo manager, inspired by Lerna."
 license = "MIT"
 readme = "README.md"
 default-run = "cargo-tangerine"
+repository = "https://github.com/alxolr/cargo-tangerine"
 
 [[bin]]
 name = "cargo-tangerine"
 path = "src/main.rs"
-
 
 [profile.release]
 lto = "thin"
@@ -19,6 +19,7 @@ lto = "thin"
 [dependencies]
 clap = { version = "4.5.31", features = ["derive"] }
 derive_more = { version = "2.0.1", features = ["from"] }
+regex = "1.11.1"
 serde = { version = "1.0.218", features = ["derive"] }
 tokio = { version = "1.43.0", features = ["full"] }
 toml = "0.8.20"
