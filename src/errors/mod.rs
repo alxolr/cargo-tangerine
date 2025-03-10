@@ -11,6 +11,7 @@ pub enum Error {
     Toml(toml::de::Error),
     Str(&'static str),
     FromUtf8(std::string::FromUtf8Error),
+    Regex(regex::Error),
 }
 
 impl Display for Error {
@@ -21,6 +22,7 @@ impl Display for Error {
             Error::Toml(err) => write!(f, "TOML error: {}", err),
             Error::Str(err) => write!(f, "{}", err),
             Error::FromUtf8(err) => write!(f, "UTF-8 error: {}", err),
+            Error::Regex(err) => write!(f, "Regex error: {}", err),
         }
     }
 }

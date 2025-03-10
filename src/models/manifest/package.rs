@@ -22,4 +22,8 @@ impl Manifest {
 
         Ok(manifest)
     }
+
+    pub fn with_version(&self) -> String {
+        format!("{}@{}", self.package.name, self.package.version)
+    }
 }

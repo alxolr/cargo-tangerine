@@ -5,7 +5,7 @@ use clap::Parser;
 use crate::{
     errors::Result,
     models::manifest::{package, workspace},
-    utils::{run_cargo_info, run_cargo_publish},
+    utils::{is_package_published, run_cargo_publish},
 };
 
 #[derive(Debug, Parser)]
@@ -25,20 +25,11 @@ impl Publish {
             let package_manifest_path = self.path.join(member).join("Cargo.toml");
             let package_manifest = package::Manifest::from_toml(&package_manifest_path)?;
 
-            let published_version = run_cargo_info(member, &self.path).await?;
-
-            if published_version.version == package_manifest.package.version {
-                println!("{}@{} ✔", member, package_manifest.package.version);
+            if is_package_published(&package_manifest.with_version(), &self.path).await? {
+                println!("{} ✔", package_manifest.with_version());
                 continue;
             } else {
-                println!(
-                    "{}@{} -> {}@{}",
-                    published_version.name,
-                    published_version.version,
-                    member,
-                    package_manifest.package.version
-                );
-
+                println!("{} - to publish", package_manifest.with_version());
                 // Publish package
                 run_cargo_publish(member, &self.path).await?;
             }
