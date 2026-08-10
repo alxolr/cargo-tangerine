@@ -1,6 +1,6 @@
 [package]
 name = "cargo-tangerine"
-version = "0.1.2"
+version = "0.1.4"
 authors = ["Alexandru Olaru <alxolr@gmail.com>"]
 edition = "2021"
 description = "Cargo workspaces monorepo manager, inspired by Lerna."
@@ -17,9 +17,9 @@ path = "src/main.rs"
 lto = "thin"
 
 [dependencies]
-clap = { version = "4.5.31", features = ["derive"] }
-derive_more = { version = "2.0.1", features = ["from"] }
-regex = "1.11.1"
-serde = { version = "1.0.219", features = ["derive"] }
-tokio = { version = "1.44.0", features = ["full"] }
-toml = "0.8.20"
+clap = { version = "4.6.6", features = ["derive"] }
+derive_more = { version = "2.1.1", features = ["from"] }
+regex = "1.13.1"
+serde = { version = "1.0.229", features = ["derive"] }
+tokio = { version = "1.53.1", features = ["full"] }
+toml = "1.1.4"
