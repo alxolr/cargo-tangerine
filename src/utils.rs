@@ -75,28 +75,130 @@ pub fn topological_sort(members: &[String], workspace_path: &Path) -> Result<Vec
     Ok(sorted)
 }
 
-/// Will run `cargo info` for the given member in the given path and return the package information.
-/// If the command fails this means the package with version is not published.
+/// Runs `cargo info {name}` (by name only) and returns the latest version published to the
+/// registry, or `None` if the package has never been published.
 ///
-/// Note: We run `cargo info` from a temp directory with `--registry crates-io` to avoid
-/// resolving the package locally from the workspace (which would always report the current version).
-pub async fn is_package_published(member: &str, _path: &PathBuf) -> Result<bool> {
+/// Querying by name (rather than `name@version`) makes cargo report the latest version from the
+/// registry index. The query runs from a neutral directory (see below) with the workspace's
+/// `.cargo/config.toml` supplied via `--config`, targeting the configured default registry.
+pub async fn fetch_remote_version(name: &str, path: &Path) -> Result<Option<String>> {
+    // Run `cargo info` from a directory OUTSIDE the workspace. Inside the workspace, cargo
+    // resolves members as local path dependencies and reports the local version
+    // (`version: X (from ./...)`) instead of the registry version. From a neutral directory
+    // there is no local package to resolve, so cargo queries the registry.
+    let query_dir = std::env::temp_dir();
+
+    let mut args: Vec<String> = vec!["info".into(), name.into()];
+
+    // Since we run outside the workspace, cargo no longer picks up the workspace's
+    // `.cargo/config.toml`. Locate it and pass it via `--config` so any private/alternate
+    // registry definition and default-registry setting are honored. If a default registry is
+    // configured, target it explicitly with `--registry`.
+    if let Some(config_path) = find_cargo_config(path) {
+        args.push("--config".into());
+        args.push(config_path.to_string_lossy().into_owned());
+
+        if let Some(default_registry) = read_default_registry(&config_path) {
+            args.push("--registry".into());
+            args.push(default_registry);
+        }
+    }
+
     let output = Command::new("cargo")
-        .current_dir(std::env::temp_dir())
-        .args(["info", member, "--registry", "crates-io"])
+        .current_dir(&query_dir)
+        .args(&args)
         .output()
         .await?;
 
     if !output.status.success() {
-        // check if the error is due to the package not being published
         let stderr = String::from_utf8(output.stderr)?;
         let re = Regex::new(r"could not find `(.*)` in registry")?;
         if re.is_match(&stderr) {
-            return Ok(false);
+            // Package not published at all
+            return Ok(None);
         }
+        // Some other failure (network, auth, etc.) - surface it
+        return Err("Failed to run `cargo info`".into());
     }
 
-    Ok(true)
+    let stdout = String::from_utf8(output.stdout)?;
+    Ok(parse_version(&stdout))
+}
+
+/// Walks up from `start` looking for a `.cargo/config.toml` (or legacy `.cargo/config`).
+fn find_cargo_config(start: &Path) -> Option<PathBuf> {
+    let mut dir = Some(start);
+    while let Some(current) = dir {
+        for name in [".cargo/config.toml", ".cargo/config"] {
+            let candidate = current.join(name);
+            if candidate.is_file() {
+                return Some(candidate);
+            }
+        }
+        dir = current.parent();
+    }
+    None
+}
+
+/// Reads the `[registry] default = "..."` value from a cargo config file, if present.
+fn read_default_registry(config_path: &Path) -> Option<String> {
+    let contents = std::fs::read_to_string(config_path).ok()?;
+    let value: toml::Value = toml::from_str(&contents).ok()?;
+    value
+        .get("registry")?
+        .get("default")?
+        .as_str()
+        .map(|s| s.to_string())
+}
+
+/// Parses the registry version from `cargo info` output.
+///
+/// The `version:` line may carry a source marker:
+///   - `version: 1.2.3`                                  → registry version (bare)
+///   - `version: 1.2.3 (from registry `my-registry`)`    → registry version
+///   - `version: 1.2.3 (from ./some/path)`               → LOCAL path resolution
+///
+/// A local path resolution is not a registry version, so we return `None` for it. For the other
+/// cases we return the bare version number (the `(from ...)` suffix is stripped).
+fn parse_version(info_output: &str) -> Option<String> {
+    for line in info_output.lines() {
+        let line = line.trim();
+        if let Some(rest) = line.strip_prefix("version:") {
+            let value = rest.trim();
+
+            // Split off any `(from ...)` source marker.
+            let (version, source) = match value.split_once("(from") {
+                Some((v, s)) => (v.trim(), Some(s.trim_end_matches(')').trim())),
+                None => (value, None),
+            };
+
+            // If the source is a local path (starts with `.` or `/`), this is not a
+            // registry version.
+            if let Some(source) = source {
+                if source.starts_with('.') || source.starts_with('/') {
+                    return None;
+                }
+            }
+
+            if version.is_empty() {
+                return None;
+            }
+            return Some(version.to_string());
+        }
+    }
+    None
+}
+
+/// Determines whether a package needs publishing by comparing the local version against
+/// the version currently on the remote registry.
+///
+/// Returns `true` when the package has never been published, or when the local version
+/// differs from the published version.
+pub async fn needs_publishing(name: &str, local_version: &str, path: &Path) -> Result<bool> {
+    match fetch_remote_version(name, path).await? {
+        Some(remote_version) => Ok(remote_version != local_version),
+        None => Ok(true),
+    }
 }
 
 pub async fn run_cargo_publish(member: &str, path: &PathBuf) -> Result<()> {
@@ -116,4 +218,61 @@ pub async fn run_cargo_publish(member: &str, path: &PathBuf) -> Result<()> {
     println!("Published package: {}", member);
 
     Ok(())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::parse_version;
+
+    #[test]
+    fn parses_version_from_cargo_info_output() {
+        let output = "\
+serde #serde #serialization #no_std
+A generic serialization/deserialization framework
+version: 1.0.229
+license: MIT OR Apache-2.0
+";
+        assert_eq!(parse_version(output), Some("1.0.229".to_string()));
+    }
+
+    #[test]
+    fn parses_version_with_leading_whitespace() {
+        let output = "  version:   11.4.2  ";
+        assert_eq!(parse_version(output), Some("11.4.2".to_string()));
+    }
+
+    #[test]
+    fn returns_none_when_no_version_line() {
+        let output = "some package\ndescription only";
+        assert_eq!(parse_version(output), None);
+    }
+
+    #[test]
+    fn returns_none_for_locally_resolved_version() {
+        // When cargo resolves a workspace member locally it appends a `(from ./path)` marker.
+        // That is a local path version, not a registry version.
+        let output = "\
+cargo-tangerine
+version: 0.1.5 (from ./)
+license: MIT
+";
+        assert_eq!(parse_version(output), None);
+    }
+
+    #[test]
+    fn returns_none_for_local_path_subdir() {
+        let output = "version: 11.4.1 (from ./conform-cdl)";
+        assert_eq!(parse_version(output), None);
+    }
+
+    #[test]
+    fn parses_registry_sourced_version() {
+        // A version sourced from a named registry IS a registry version; strip the marker.
+        let output = "\
+conform-cdl
+version: 11.4.1 (from registry `conform5-rust-common`)
+license: unknown
+";
+        assert_eq!(parse_version(output), Some("11.4.1".to_string()));
+    }
 }
